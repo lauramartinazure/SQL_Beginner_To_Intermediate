@@ -1,0 +1,619 @@
+-- Session 2 Review Concepts
+-- Aggregations in queries
+-- CASE WHEN syntax
+-- Joins between 2 and 3 tables
+
+SELECT
+  "CountryFull",
+  COUNT(*) AS total,
+  COUNT(*) FILTER (WHERE "Gender" ILIKE 'Female') AS female_count,
+  ROUND(
+    COUNT(*) FILTER (WHERE "Gender" ILIKE 'Female') * 100.0 
+    / COUNT(*),
+    1
+  ) AS female_percentage
+FROM "Customers"
+GROUP BY "CountryFull";
+
+
+SELECT
+  "GivenName",
+  "Surname",
+  "GivenName",
+  "Gender",
+  CASE
+    WHEN "Gender" ILIKE 'Female' THEN 'Female Member'
+    WHEN "Gender" ILIKE 'Male' THEN 'Male Member'
+    ELSE 'No Gender Specified Member'
+  END AS gender_category
+FROM "Customers";
+
+
+SELECT
+  c."GivenName", -- from customers table
+  c."Surname", -- from customers table
+  s."OrderDate", -- from sales table
+  s."Quantity" -- from sales table
+FROM "Sales" s -- note the alias 's'
+INNER JOIN "Customers" c -- note the alias 'c'
+  ON s."CustomerKey" = c."CustomerKey" -- the keys that create the relationship
+ORDER BY s."OrderDate" DESC;
+
+
+SELECT
+  c."GivenName", -- Customers table
+  c."Surname",
+  p."ProductName", -- products table
+  p."Price",
+  s."Quantity", -- Sales table
+  s."OrderDate"
+FROM "Sales" s
+INNER JOIN "Customers" c
+  ON s."CustomerKey" = c."CustomerKey"
+INNER JOIN "Products" p
+  ON s."ProductKey" = p."ProductKey"
+ORDER BY s."OrderDate" DESC;
+
+
+-- Session 3: WITH statements 
+-- A WITH statement creates a temporary result set (like a mini table) that exists only for the duration of that query.
+-- “Step 1: Create a temporary table
+-- Step 2: Use it to answer this question”
+
+- Basic query
+SELECT 
+"CountryFull",
+COUNT(*) AS total_customers
+FROM "Customers"
+GROUP BY "CountryFull";
+
+-- Using WITH
+WITH country_counts AS ( --'country_counts' is how we will refer to results of this query
+  SELECT -- Creates grouped table
+    "CountryFull",
+    COUNT(*) AS total_customers
+  FROM "Customers"
+  GROUP BY "CountryFull"
+)
+SELECT * --Selects only countries with counts over 10k
+FROM country_counts -- note that this is referenced from above
+WHERE total_customers > 10000
+ORDER BY total_customers DESC;
+
+-- Creating a single value with 'WITH'
+SELECT AVG("Age") AS avg_age
+FROM "Customers"
+
+WITH average_age AS (
+  SELECT AVG("Age") AS avg_age
+  FROM "Customers"
+)
+
+SELECT 
+  c."GivenName",
+  c."Surname",
+  c."Age"
+FROM "Customers" c, average_age
+WHERE c."Age" > average_age.avg_age -- we reference average age here
+ORDER BY c."Age" ASC;
+
+-- Fully worked example:
+
+-- Basic query that will become the inside of our 'WITH' statement:
+-- Build “birthday this year” (works for most people)
+SELECT
+  "GivenName",
+  "Surname",
+  "Birthday",
+  EXTRACT(YEAR  FROM CURRENT_DATE)::int AS this_year,
+  EXTRACT(MONTH FROM "Birthday")::int   AS b_month,
+  EXTRACT(DAY   FROM "Birthday")::int   AS b_day
+  FROM "Customers"
+WHERE "Birthday" IS NOT NULL
+
+-- Next - add the 'next ten dayus' filter
+SELECT
+  "GivenName",
+  "Surname",
+  "Birthday",
+  MAKE_DATE(
+    EXTRACT(YEAR FROM CURRENT_DATE)::int,
+    EXTRACT(MONTH FROM "Birthday")::int,
+    EXTRACT(DAY FROM "Birthday")::int
+  ) AS birthday_this_year
+FROM "Customers"
+WHERE "Birthday" IS NOT NULL
+  AND MAKE_DATE(
+    EXTRACT(YEAR FROM CURRENT_DATE)::int,
+    EXTRACT(MONTH FROM "Birthday")::int,
+    EXTRACT(DAY FROM "Birthday")::int
+  )
+  BETWEEN CURRENT_DATE
+  AND CURRENT_DATE + INTERVAL '10 days'
+ORDER BY birthday_this_year, "Surname", "GivenName";
+
+-- BUT this repeats the MAKE_DATE statement - we can replace this using WITH
+
+WITH b AS (
+  SELECT
+    "GivenName",
+    "Surname",
+    "Birthday",
+    EXTRACT(YEAR FROM CURRENT_DATE)::int AS this_year, -- will be referenced below
+    EXTRACT(MONTH FROM "Birthday")::int  AS b_month, -- will be referenced below
+    EXTRACT(DAY FROM "Birthday")::int    AS b_day -- will be referenced below
+  FROM "Customers"
+  WHERE "Birthday" IS NOT NULL
+)
+SELECT
+  "GivenName",
+  "Surname",
+  "Birthday",
+  MAKE_DATE(this_year, b_month, b_day) AS birthday_this_year -- we made these in our 'WITH' query
+FROM b
+ORDER BY birthday_this_year, "Surname", "GivenName";
+
+-- Next - add the 'next 10 days' filter
+
+WITH b AS (
+  SELECT
+    "GivenName",
+    "Surname",
+    "Birthday",
+    EXTRACT(YEAR FROM CURRENT_DATE)::int AS this_year,
+    EXTRACT(MONTH FROM "Birthday")::int  AS b_month,
+    EXTRACT(DAY FROM "Birthday")::int    AS b_day
+  FROM "Customers"
+  WHERE "Birthday" IS NOT NULL
+)
+SELECT
+  "GivenName",
+  "Surname",
+  "Birthday",
+  MAKE_DATE(this_year, b_month, b_day) AS birthday_this_year
+FROM b
+WHERE MAKE_DATE(this_year, b_month, b_day)
+  BETWEEN CURRENT_DATE
+  AND CURRENT_DATE + INTERVAL '10 days'
+ORDER BY birthday_this_year, "Surname", "GivenName";
+
+-- Finding edge cases - the leap year problem
+-- Logic: “If someone was born on Feb 29, MAKE_DATE(this_year, 2, 29) will fail in non-leap years.”
+-- So we add a CASE that changes day 29 → 28 only when needed.
+-- Leap years are years divisible by 4 but not by 100 unless ALSO divisible by 400
+-- e.g. 1900 was not a leap year but 2000 was as 1900 cannot be integer divided by 400.
+
+WITH b AS (
+  SELECT
+    "GivenName",
+    "Surname",
+    "Birthday",
+    EXTRACT(YEAR FROM CURRENT_DATE)::int AS this_year,
+    EXTRACT(MONTH FROM "Birthday")::int  AS b_month,
+    EXTRACT(DAY FROM "Birthday")::int    AS b_day
+  FROM "Customers"
+  WHERE "Birthday" IS NOT NULL
+)
+SELECT
+  "GivenName",
+  "Surname",
+  "Birthday",
+  MAKE_DATE(
+    this_year,
+    b_month,
+    CASE
+      WHEN b_month = 2
+       AND b_day = 29
+       AND NOT (
+         this_year % 4 = 0
+         AND (this_year % 100 <> 0 OR this_year % 400 = 0)
+       )
+      THEN 28
+      ELSE b_day
+    END
+  ) AS birthday_this_year
+FROM b;
+
+
+-- Finally - we need to add the same condition ti ensure that THIS year is also not a leap year
+-- Putting it all together! Looking for customers with valid birthdays in the next ten days - accounting for leap year dates such as 29th Feb. 
+WITH b AS (
+  SELECT
+    "GivenName",
+    "Surname",
+    "Birthday",
+    EXTRACT(YEAR  FROM CURRENT_DATE)::int AS this_year,
+    EXTRACT(MONTH FROM "Birthday")::int   AS b_month,
+    EXTRACT(DAY   FROM "Birthday")::int   AS b_day
+  FROM "Customers"
+  WHERE "Birthday" IS NOT NULL
+)
+SELECT
+  "GivenName",
+  "Surname",
+  "Birthday",
+  MAKE_DATE(
+    this_year,
+    b_month,
+    CASE
+      WHEN b_month = 2
+       AND b_day = 29
+       AND NOT (
+         this_year % 4 = 0
+         AND (this_year % 100 <> 0 OR this_year % 400 = 0)
+       )
+      THEN 28
+      ELSE b_day
+    END
+  ) AS birthday_this_year
+FROM b
+WHERE
+  MAKE_DATE(
+    this_year,
+    b_month,
+    CASE
+      WHEN b_month = 2
+       AND b_day = 29
+       AND NOT (
+         this_year % 4 = 0
+         AND (this_year % 100 <> 0 OR this_year % 400 = 0)
+       )
+      THEN 28
+      ELSE b_day
+    END
+  )
+  BETWEEN CURRENT_DATE
+  AND CURRENT_DATE + INTERVAL '10 days'
+ORDER BY birthday_this_year, "Surname", "GivenName";
+
+-- Percentiles
+-- NTILE(4) assigns a bucket number 1–4. Because we order by spend DESC, quartile 1 = highest spenders.
+
+WITH customer_spend AS (
+  SELECT
+    s."CustomerKey",
+    SUM(s."Quantity" * s."UnitPrice") AS total_spent
+  FROM "Sales" s
+  GROUP BY s."CustomerKey"
+)
+SELECT
+  c."GivenName",
+  c."Surname",
+  cs.total_spent,
+  NTILE(4) OVER (ORDER BY cs.total_spent DESC) AS spend_quartile
+FROM customer_spend cs
+JOIN "Customers" c ON cs."CustomerKey" = c."CustomerKey"
+ORDER BY cs.total_spent ASC;
+
+
+-- Decile - NTILE(10)
+
+WITH customer_spend AS (
+  SELECT
+    s."CustomerKey",
+    SUM(s."Quantity" * s."UnitPrice") AS total_spent
+  FROM "Sales" s
+  GROUP BY s."CustomerKey"
+)
+SELECT
+  c."GivenName",
+  c."Surname",
+  cs.total_spent,
+  NTILE(10) OVER (ORDER BY cs.total_spent DESC) AS spend_decile
+FROM customer_spend cs
+JOIN "Customers" c ON cs."CustomerKey" = c."CustomerKey"
+ORDER BY cs.total_spent ASC;
+
+-- percentile = NTILE(100)
+
+WITH customer_spend AS (
+  SELECT
+    s."CustomerKey",
+    SUM(s."Quantity" * s."UnitPrice") AS total_spent
+  FROM "Sales" s
+  GROUP BY s."CustomerKey"
+)
+SELECT
+  c."GivenName",
+  c."Surname",
+  cs.total_spent,
+  NTILE(100) OVER (ORDER BY cs.total_spent DESC) AS spend_percentile
+FROM customer_spend cs
+JOIN "Customers" c ON cs."CustomerKey" = c."CustomerKey"
+ORDER BY cs.total_spent ASC;
+
+
+-- 2) Product Popularity Tiers (Top / Middle / Low - splits into 33.3%s)
+WITH product_sales AS (
+  SELECT
+    s."ProductKey",
+    SUM(s."Quantity") AS total_quantity_sold
+  FROM "Sales" s
+  GROUP BY s."ProductKey"
+)
+SELECT
+  p."ProductName",
+  ps.total_quantity_sold,
+  NTILE(3) OVER (ORDER BY ps.total_quantity_sold DESC) AS popularity_tier
+FROM product_sales ps
+JOIN "Product" p ON ps."ProductKey" = p."ProductKey"
+ORDER BY ps.total_quantity_sold DESC;
+
+-- Window functions
+-- Core joined table that we will use throughout
+
+SELECT
+  s."OrderKey",
+  s."OrderDate",
+  c."CustomerKey",
+  c."GivenName",
+  c."Surname",
+  p."ProductKey",
+  p."ProductName",
+  s."Quantity",
+  s."UnitPrice",
+  (s."Quantity" * s."UnitPrice") AS line_revenue
+FROM "Sales" s
+JOIN "Customers" c ON s."CustomerKey" = c."CustomerKey"
+JOIN "Product"   p ON s."ProductKey"  = p."ProductKey";
+
+-- Concept - numbering rows within a group
+-- Row number gives an incrementing row number within a group
+
+SELECT
+  c."CustomerKey",
+  c."GivenName",
+  c."Surname",
+  s."OrderKey",
+  s."OrderDate",
+  ROW_NUMBER() OVER (
+    PARTITION BY c."CustomerKey"
+    ORDER BY s."OrderDate"
+  ) AS order_number_for_customer
+FROM "Sales" s
+JOIN "Customers" c ON s."CustomerKey" = c."CustomerKey"
+ORDER BY c."CustomerKey", order_number_for_customer;
+
+
+
+-- RANK vs DENSE_RANK: “Rank customers by age within country" - based on a spoecific quantity in the table
+-- RANK() leaves gaps after ties (1,1,3…)
+-- DENSE_RANK() doesn’t (1,1,2…)
+
+SELECT
+  c."CountryFull",
+  c."GivenName",
+  c."Surname",
+  c."Age",
+  RANK() OVER (
+    PARTITION BY c."CountryFull"
+    ORDER BY c."Age" DESC
+  ) AS age_rank
+FROM "Customers" c
+ORDER BY c."CountryFull", age_rank, c."Surname";
+
+
+SELECT
+  c."CountryFull",
+  c."GivenName",
+  c."Surname",
+  c."Age",
+  DENSE_RANK() OVER (
+    PARTITION BY c."CountryFull"
+    ORDER BY c."Age" DESC
+  ) AS age_dense_rank
+FROM "Customers" c
+ORDER BY c."CountryFull", age_dense_rank, c."Surname";
+
+-- Partitions and aggregation can give running totals, running averages etc.
+-- Running totals
+
+SELECT
+  c."CustomerKey",
+  c."GivenName",
+  c."Surname",
+  s."OrderDate",
+  (s."Quantity" * s."UnitPrice") AS line_revenue,
+  SUM(s."Quantity" * s."UnitPrice") OVER (
+    PARTITION BY c."CustomerKey"
+    ORDER BY s."OrderDate"
+    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+  ) AS running_revenue_for_customer
+FROM "Sales" s
+JOIN "Customers" c ON s."CustomerKey" = c."CustomerKey"
+ORDER BY c."CustomerKey", s."OrderDate";
+
+-- Running average
+
+SELECT
+  c."CustomerKey",
+  c."GivenName",
+  c."Surname",
+  s."OrderDate",
+  (s."Quantity" * s."UnitPrice") AS line_revenue,
+  AVG(s."Quantity" * s."UnitPrice") OVER (
+    PARTITION BY c."CustomerKey"
+    ORDER BY s."OrderDate"
+    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+  ) AS running_AVG_for_customer
+FROM "Sales" s
+JOIN "Customers" c ON s."CustomerKey" = c."CustomerKey"
+ORDER BY c."CustomerKey", s."OrderDate";
+
+
+-- LAG to compare each purchase to a previous purchase
+
+SELECT
+  c."CustomerKey",
+  c."GivenName",
+  c."Surname",
+  s."OrderDate",
+  (s."Quantity" * s."UnitPrice") AS line_revenue,
+  LAG(s."Quantity" * s."UnitPrice") OVER (
+    PARTITION BY c."CustomerKey"
+    ORDER BY s."OrderDate"
+  ) AS previous_line_revenue,
+  (s."Quantity" * s."UnitPrice")
+    - LAG(s."Quantity" * s."UnitPrice") OVER (
+        PARTITION BY c."CustomerKey"
+        ORDER BY s."OrderDate"
+      ) AS change_from_previous
+FROM "Sales" s
+JOIN "Customers" c ON s."CustomerKey" = c."CustomerKey"
+ORDER BY c."CustomerKey", s."OrderDate";
+
+
+-- Top 3 products per customer” (ROW_NUMBER + CTE)
+-- Concept: window function + filtering on row number
+
+WITH product_totals AS (
+  SELECT
+    s."CustomerKey",
+    s."ProductKey",
+    SUM(s."Quantity" * s."UnitPrice") AS total_spend_on_product
+  FROM "Sales" s
+  GROUP BY s."CustomerKey", s."ProductKey"
+),
+ranked AS (
+  SELECT
+    pt.*,
+    ROW_NUMBER() OVER (
+      PARTITION BY pt."CustomerKey"
+      ORDER BY pt.total_spend_on_product DESC
+    ) AS product_rank_for_customer
+  FROM product_totals pt
+)
+SELECT
+  c."GivenName",
+  c."Surname",
+  p."ProductName",
+  r.total_spend_on_product,
+  r.product_rank_for_customer
+FROM ranked r
+JOIN "Customers" c ON r."CustomerKey" = c."CustomerKey"
+JOIN "Product" p   ON r."ProductKey"  = p."ProductKey"
+WHERE r.product_rank_for_customer <= 3
+ORDER BY c."Surname", c."GivenName", r.product_rank_for_customer;
+
+
+WITH customer_spend AS (
+  SELECT
+    s."CustomerKey",
+    SUM(s."Quantity" * s."UnitPrice") AS total_spent
+  FROM "Sales" s
+  GROUP BY s."CustomerKey"
+)
+SELECT
+  c."GivenName",
+  c."Surname",
+  cs.total_spent,
+  NTILE(4) OVER (ORDER BY cs.total_spent DESC) AS spend_quartile
+FROM customer_spend cs
+JOIN "Customers" c ON cs."CustomerKey" = c."CustomerKey"
+ORDER BY cs.total_spent DESC;
+
+
+-- Query to create a simple table with a JSON friendly_name
+-- Note the jsonb (json binary) data type
+
+CREATE TABLE products_json (
+  ProductID serial PRIMARY KEY,
+  ProductName text,
+  Attributes jsonb
+);
+
+INSERT INTO products_json (ProductName, Attributes)
+VALUES
+  (
+    'Smartphone X100',
+    '{"colour": "Black", "warranty": "2 years", "features": ["5G", "OLED display", "Dual SIM"]}'
+  ),
+  (
+    'Laptop Z200',
+    '{"colour": "Silver", "warranty": "1 year", "features": ["Touchscreen", "SSD", "Backlit keyboard"]}'
+  ),
+  (
+    'Headphones A50',
+    '{"colour": "Blue", "warranty": "6 months", "features": ["Noise cancelling", "Bluetooth"]}'
+  ),
+  (
+    'Smartwatch W10',
+    '{"colour": "Black", "warranty": "1 year", "features": ["Heart rate", "GPS", "Waterproof"]}'
+  ),
+  (
+    'Tablet M7',
+    '{"colour": "White", "warranty": "2 years", "features": ["Stylus support", "Wi-Fi + LTE"]}'
+  ),
+  (
+    'Camera ProShot',
+    '{"colour": "Black", "warranty": "1 year", "features": ["4K video", "Wi-Fi", "Interchangeable lens"]}'
+  ),
+  (
+    'Gaming Console GX',
+    '{"colour": "White", "warranty": "3 years", "features": ["4K gaming", "HDR", "Wireless controller"]}'
+  ),
+  (
+    'Bluetooth Speaker Boom',
+    '{"colour": "Red", "warranty": "1 year", "features": ["Water resistant", "12h battery", "Voice control"]}'
+  ),
+  (
+    'E-Reader Lite',
+    '{"colour": "Gray", "warranty": "2 years", "features": ["Backlit display", "Long battery life"]}'
+  ),
+  (
+    'Wireless Charger Pad',
+    '{"colour": "Black", "warranty": "6 months", "features": ["Fast charging", "LED indicator"]}'
+  );
+
+
+SELECT * From products_json;
+
+-- Selecting a single attribute from JSON field
+-- ->> extracts the text value of a JSON key
+SELECT 
+  ProductName, 
+  Attributes->>'colour' AS colour 
+FROM products_json;
+
+-- Applying a filter using the elements of a JSON field
+SELECT 
+  ProductName, 
+  Attributes->>'colour' AS colour
+FROM products_json
+WHERE Attributes->>'colour' = 'Black';
+
+-- Using an array search to count items with a specific feature
+-- @> means "contains".
+-- This query returns products where features includes "4K video".
+-- '["4K video"]'::jsonb must be cast explicitly as JSONB.
+
+SELECT 
+  ProductName, 
+  Attributes->'features' AS features
+FROM products_json
+WHERE Attributes->'features' @> '["4K video"]'::jsonb;
+
+-- Filtering using the 'in' syntax
+SELECT 
+  ProductName, 
+  Attributes->>'warranty' AS warranty
+FROM products_json
+WHERE Attributes->>'warranty' IN ('2 years', '3 years');
+
+-- Extract all distinct values from a JSON field (similar to a typical column)
+SELECT DISTINCT Attributes->>'warranty' AS warranty
+FROM products_json;
+
+-- Function jsonb_array_elements_text() expands a JSON array into multiple rows.
+-- Each feature gets its own row → perfect for filtering, grouping, or analysis.
+
+SELECT 
+  ProductName, 
+  jsonb_array_elements_text(Attributes->'features') AS feature
+FROM products_json;
+
+-- Extracting a number from a JSON field 
+SELECT 
+  ProductName,
+  (regexp_match(Attributes->>'warranty', '\d+'))[1]::INT AS warranty_years
+FROM products_json;

@@ -1,0 +1,172 @@
+-- Beginner-friendly queries
+
+-- Basic SELECT Statements
+SELECT *
+FROM "Customers";
+
+SELECT *
+FROM "Customers"
+LIMIT 10;
+
+SELECT "GivenName", "Surname", "Age"
+FROM "Customers";
+
+-- Filtering by column values
+SELECT "GivenName", "Surname", "Gender"
+FROM "Customers"
+WHERE "Gender" = 'female';
+
+SELECT "GivenName", "Surname", "Age"
+FROM "Customers"
+WHERE "Age" > 60;
+
+SELECT "GivenName", "Surname", "Age"
+FROM "Customers"
+WHERE "Age" < 40;
+
+SELECT "GivenName", "Surname", "Age"
+FROM "Customers"
+WHERE "Age" = 30;
+
+-- Filtering by multiple conditions
+SELECT "GivenName", "Surname", "CountryFull", "Age"
+FROM "Customers"
+WHERE "CountryFull" = 'Australia'
+AND "Age" < 40;
+
+SELECT "GivenName", "Surname", "CountryFull", "Age"
+FROM "Customers"
+WHERE "CountryFull" = 'Australia'
+OR "Age" < 40;
+
+SELECT *
+FROM "Customers"
+WHERE ("CountryFull" = 'Australia' AND "Gender" <> 'female');
+
+SELECT *
+FROM "Customers"
+WHERE ("CountryFull" = 'Australia' AND "Gender" <> 'female')
+   OR ("Gender" = 'female' AND "CountryFull" <> 'Australia');
+
+-- String filtering - ILIKE and LIKE
+SELECT "GivenName", "Surname", "Occupation"
+FROM "Customers"
+WHERE "Occupation" ILIKE '%teacher%';
+
+SELECT "GivenName", "Surname", "Occupation"
+FROM "Customers"
+WHERE "Occupation" LIKE '%doctor%';
+
+-- Ordering 
+SELECT "GivenName", "Surname", "Age"
+FROM "Customers"
+ORDER BY "Age" DESC;
+
+SELECT "GivenName", "Surname", "Age"
+FROM "Customers"
+ORDER BY Age DESC
+LIMIT 1;
+
+-- Basic Aggregations
+SELECT COUNT(*) AS total_customers
+FROM "Customers";
+
+SELECT MIN("Age") AS min_age
+FROM "Customers";
+
+SELECT MAX("Age") AS min_age
+FROM "Customers";
+
+SELECT AVG("Age") AS average_age
+FROM "Customers";
+
+SELECT SUM("Salary") AS total_salary
+FROM "Customers";
+
+-- Multiple queries
+SELECT
+  COUNT(*) AS total_customers,
+  MIN("Age") AS youngest_customer,
+  MAX("Age") AS oldest_customer,
+  AVG("Age") AS average_age
+FROM "Customers";
+
+
+SELECT DISTINCT "CountryFull" AS unique_countries
+FROM "Customers";
+
+SELECT DISTINCT "Occupation" AS unique_jobs
+FROM "Customers";
+
+-- Null-aware count 
+-- COUNT(*) → counts all rows
+-- COUNT(column) → ignores NULL values
+SELECT COUNT("Occupation") AS customers_with_job
+FROM "Customers";
+
+-- Combining distinct with aggregations
+SELECT COUNT(DISTINCT "CountryFull") AS number_of_countries
+FROM "Customers";
+
+SELECT COUNT(DISTINCT "Occupation") AS unique_jobs
+FROM "Customers";
+
+-- Filtering and Aggregations
+SELECT COUNT(*) AS total_customers_sustralia
+FROM "Customers"
+WHERE "CountryFull" = 'Australia';
+
+-- Grouping and aggregation
+SELECT "Gender", COUNT(*) AS total
+FROM "Customers"
+GROUP BY "Gender";
+
+SELECT "Gender", AVG("Age") AS average_age
+FROM "Customers"
+GROUP BY "Gender";
+
+SELECT "CountryFull", AVG("Age") AS average_age
+FROM "Customers"
+GROUP BY "CountryFull"
+ORDER BY average_age DESC;
+
+SELECT "Continent", COUNT(*) AS total_customers
+FROM "Customers"
+GROUP BY "Continent"
+ORDER BY total_customers DESC;
+
+SELECT 
+  "CountryFull",
+  MIN("Age") AS youngest,
+  MAX("Age") AS oldest
+FROM "Customers"
+GROUP BY "CountryFull";
+
+SELECT 
+  "CountryFull",
+  "Gender",
+  COUNT(*) AS total_customers
+FROM "Customers"
+GROUP BY "CountryFull", "Gender"
+ORDER BY "CountryFull", "Gender";
+
+-- Applying bsasic aggregations to analysis
+SELECT 
+  MAX("Age") - MIN("Age") AS age_range
+FROM "Customers";
+
+
+-- Group by and 'HAVING'
+-- WHERE filters rows
+-- HAVING filters grouped results
+
+SELECT "CountryFull", COUNT(*) AS total_customers
+FROM "Customers"
+GROUP BY "CountryFull"
+ORDER BY total_customers DESC;
+
+SELECT "CountryFull", COUNT(*) AS total_customers
+FROM "Customers"
+GROUP BY "CountryFull"
+HAVING COUNT(*) > 5000
+ORDER BY total_customers DESC;

@@ -1,0 +1,79 @@
+-- Session 3 Knowledge Check 
+
+-- Question 4: CTE + Comparison to Average
+
+-- Find customers who have spent more than the average total spend per customer.
+
+-- Suggested Solution
+
+WITH customer_spend AS (
+  SELECT
+    c."CustomerKey",
+    c."GivenName",
+    c."Surname",
+    SUM(s."Quantity" * p."UnitPrice") AS total_spent
+  FROM "Sales" s
+  INNER JOIN "Customers" c
+    ON s."CustomerKey" = c."CustomerKey"
+  INNER JOIN "Product" p
+    ON s."ProductKey" = p."ProductKey"
+  GROUP BY c."CustomerKey", c."GivenName", c."Surname"
+),
+average_spend AS (
+  SELECT AVG(total_spent) AS avg_spend
+  FROM customer_spend
+)
+
+SELECT
+  cs."GivenName",
+  cs."Surname",
+  cs.total_spent
+FROM customer_spend cs, average_spend
+WHERE cs.total_spent > average_spend.avg_spend
+ORDER BY cs.total_spent DESC;
+
+
+-- Question 2: Basic Window Function with Ranking
+
+SELECT
+  "CountryFull",
+  "GivenName",
+  "Surname",
+  "Age",
+  RANK() OVER (
+    PARTITION BY "CountryFull"
+    ORDER BY "Age" DESC
+  ) AS age_rank_within_country
+FROM "Customers"
+ORDER BY "CountryFull", age_rank_within_country;
+
+
+
+-- Question 3 - percentiles
+
+-- Which countries contain higher-spending customers on average? Look for thje top 1/4 
+
+-- Suggested Solution
+WITH customer_spend AS (
+  SELECT
+    s."CustomerKey",
+    SUM(s."Quantity" * s."UnitPrice") AS total_spent
+  FROM "Sales" s
+  GROUP BY s."CustomerKey"
+),
+country_avg_spend AS (
+  SELECT
+    c."CountryFull",
+    AVG(cs.total_spent) AS avg_customer_spend
+  FROM customer_spend cs
+  JOIN "Customers" c ON cs."CustomerKey" = c."CustomerKey"
+  GROUP BY c."CountryFull"
+)
+SELECT
+  "CountryFull",
+  ROUND(avg_customer_spend, 2) AS avg_customer_spend,
+  NTILE(4) OVER (ORDER BY avg_customer_spend DESC) AS country_spend_tier
+FROM country_avg_spend
+ORDER BY avg_customer_spend DESC;
+
+

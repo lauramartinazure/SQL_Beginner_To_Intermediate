@@ -1,0 +1,47 @@
+-- Session 1 'Test Your Knowledge' Queries and Solutions
+
+-- Show the first name, surname and age of all customers who are under 30 years old.
+
+-- SUGGESTED ANSWER:
+
+SELECT 
+  "GivenName",
+  "Surname",
+  "Age"
+FROM "Customers"
+WHERE "Age" < 30;
+
+-- How many customers are there in total?
+
+-- SUGGESTED ANSWER:
+SELECT COUNT(*) AS total_customers
+FROM "Customers";
+
+-- List all customers from Australia, sorted from youngest to oldest.
+
+-- SUGGESTED ANSWER:
+SELECT 
+  "GivenName",
+  "Surname",
+  "Age"
+FROM "Customers"
+WHERE "CountryFull" = 'Australia'
+ORDER BY "Age" ASC;
+
+-- How many customers are there in each gender?
+-- SUGGESTED ANSWER:
+SELECT 
+  "Gender",
+  COUNT(*) AS total_customers
+FROM "Customers"
+GROUP BY "Gender";
+
+-- What is the average age of customers in each country?
+-- SUGGESTED ANSWER:
+
+SELECT 
+  "CountryFull",
+  AVG("Age") AS average_age
+FROM "Customers"
+GROUP BY "CountryFull"
+ORDER BY average_age DESC;

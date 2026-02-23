@@ -1,0 +1,57 @@
+-- Session 2 Knowledge check
+
+-- Question 1: Customer Segmentation with CASE + Aggregation
+-- For each country, show:
+-- Total number of customers
+-- Number of customers under 30
+-- Number of customers over 50
+-- The percentage of customers over 50 (rounded to 1 decimal place)
+
+-- Suggested Solution
+
+SELECT
+  "CountryFull",
+  COUNT(*) AS total_customers,
+  COUNT(*) FILTER (WHERE "Age" < 30) AS under_30,
+  COUNT(*) FILTER (WHERE "Age" > 50) AS over_50,
+  ROUND(
+    COUNT(*) FILTER (WHERE "Age" > 50) * 100.0 
+    / COUNT(*),
+    1
+  ) AS percent_over_50
+FROM "Customers"
+GROUP BY "CountryFull"
+ORDER BY total_customers DESC;
+
+
+-- Question 2: Join + Revenue Calculation
+-- Show each customer’s full name and their total spend (Quantity × UnitPrice), sorted from highest spender to lowest.
+
+-- Suggested solution
+
+SELECT
+  c."GivenName" || ' ' || c."Surname" AS full_name,
+  SUM(s."Quantity" * p."UnitPrice") AS total_spent
+FROM "Sales" s
+INNER JOIN "Customers" c
+  ON s."CustomerKey" = c."CustomerKey"
+INNER JOIN "Product" p
+  ON s."ProductKey" = p."ProductKey"
+GROUP BY full_name
+ORDER BY total_spent DESC;
+
+
+-- Question 3: Date Function Logic
+-- Find all customers who signed up within the last 90 days.
+
+
+-- Suggested solution
+
+SELECT
+  "GivenName",
+  "Surname",
+  "SignupDate"
+FROM "Customers"
+WHERE "SignupDate" >= CURRENT_DATE - INTERVAL '90 days'
+ORDER BY "SignupDate" DESC;
+
